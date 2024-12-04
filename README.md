@@ -1,1 +1,1 @@
-# valence-maze
+# maze-valence

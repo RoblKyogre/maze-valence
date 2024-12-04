@@ -1,0 +1,10 @@
+services:
+  maze:
+    build: .
+    #image: maze-valence:latest
+    container_name: maze-valence
+    environment:
+      VELOCITY_SECRET: CHANGE_ME
+    ports:
+      - 25565:25565
+    restart: unless-stopped
