@@ -4,13 +4,15 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
-use std::time::SystemTime;
+use std::env;
+//use std::time::SystemTime;
 
 use flume::{Receiver, Sender};
-use noise::{NoiseFn, SuperSimplex};
-use tracing::info;
+//use tracing::info;
 use valence::prelude::*;
 use valence::spawn::IsFlat;
+use valence::ServerSettings;
+use valence::CompressionThreshold;
 
 const SPAWN_POS: DVec3 = DVec3::new(0.0, 200.0, 0.0);
 const HEIGHT: u32 = 384;
@@ -18,12 +20,6 @@ const HEIGHT: u32 = 384;
 struct ChunkWorkerState {
     sender: Sender<(ChunkPos, UnloadedChunk)>,
     receiver: Receiver<ChunkPos>,
-    // Noise functions
-    density: SuperSimplex,
-    hilly: SuperSimplex,
-    stone: SuperSimplex,
-    gravel: SuperSimplex,
-    grass: SuperSimplex,
 }
 
 #[derive(Resource)]
@@ -40,7 +36,18 @@ struct GameState {
 type Priority = u64;
 
 pub fn main() {
+	let velocity_secret = env::var("VELOCITY_SECRET").unwrap_or("CHANGE_ME".to_string());
     App::new()
+        .insert_resource(NetworkSettings {
+            connection_mode: ConnectionMode::Velocity {
+                secret: Arc::from(velocity_secret),
+            },
+            ..Default::default()
+        })
+        .insert_resource(ServerSettings {
+            compression_threshold: CompressionThreshold(-1),
+            ..Default::default()
+        })
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .add_systems(
@@ -65,14 +72,15 @@ fn setup(
     dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
 ) {
-    let seconds_per_day = 86_400;
+    // TODO: put this in player connection?
+    /*let seconds_per_day = 86_400;
     let seed = (SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_secs()
         / seconds_per_day) as u32;
 
-    info!("current seed: {seed}");
+    info!("current seed: {seed}");*/
 
     let (finished_sender, finished_receiver) = flume::unbounded();
     let (pending_sender, pending_receiver) = flume::unbounded();
@@ -80,11 +88,6 @@ fn setup(
     let state = Arc::new(ChunkWorkerState {
         sender: finished_sender,
         receiver: pending_receiver,
-        density: SuperSimplex::new(seed),
-        hilly: SuperSimplex::new(seed.wrapping_add(1)),
-        stone: SuperSimplex::new(seed.wrapping_add(2)),
-        gravel: SuperSimplex::new(seed.wrapping_add(3)),
-        grass: SuperSimplex::new(seed.wrapping_add(4)),
     });
 
     // Chunks are generated in a thread pool for parallelism and to avoid blocking
@@ -222,145 +225,26 @@ fn chunk_worker(state: Arc<ChunkWorkerState>) {
 
         for offset_z in 0..16 {
             for offset_x in 0..16 {
-                let x = offset_x as i32 + pos.x * 16;
-                let z = offset_z as i32 + pos.z * 16;
-
-                let mut in_terrain = false;
-                let mut depth = 0;
+                //let x = offset_x as i32 + pos.x * 16;
+                //let z = offset_z as i32 + pos.z * 16;
 
                 // Fill in the terrain column.
-                for y in (0..chunk.height() as i32).rev() {
-                    const WATER_HEIGHT: i32 = 55;
+                for offset_y in (0..chunk.height() as i32).rev() {
+                	// TODO: Chunk logic
+                	let y = offset_y - 64;
+                    const FLOOR_HEIGHT: i32 = 64;
 
-                    let p = DVec3::new(f64::from(x), f64::from(y), f64::from(z));
-
-                    let block = if has_terrain_at(&state, p) {
-                        let gravel_height = WATER_HEIGHT
-                            - 1
-                            - (fbm(&state.gravel, p / 10.0, 3, 2.0, 0.5) * 6.0).floor() as i32;
-
-                        if in_terrain {
-                            if depth > 0 {
-                                depth -= 1;
-                                if y < gravel_height {
-                                    BlockState::GRAVEL
-                                } else {
-                                    BlockState::DIRT
-                                }
-                            } else {
-                                BlockState::STONE
-                            }
-                        } else {
-                            in_terrain = true;
-                            let n = noise01(&state.stone, p / 15.0);
-
-                            depth = (n * 5.0).round() as u32;
-
-                            if y < gravel_height {
-                                BlockState::GRAVEL
-                            } else if y < WATER_HEIGHT - 1 {
-                                BlockState::DIRT
-                            } else {
-                                BlockState::GRASS_BLOCK
-                            }
-                        }
+                    let block = if y > FLOOR_HEIGHT {
+                    	BlockState::AIR
                     } else {
-                        in_terrain = false;
-                        depth = 0;
-                        if y < WATER_HEIGHT {
-                            BlockState::WATER
-                        } else {
-                            BlockState::AIR
-                        }
+                        BlockState::STONE
                     };
 
-                    chunk.set_block_state(offset_x, y as u32, offset_z, block);
-                }
-
-                // Add grass on top of grass blocks.
-                for y in (0..chunk.height()).rev() {
-                    if chunk.block_state(offset_x, y, offset_z).is_air()
-                        && chunk.block_state(offset_x, y - 1, offset_z) == BlockState::GRASS_BLOCK
-                    {
-                        let p = DVec3::new(f64::from(x), f64::from(y), f64::from(z));
-                        let density = fbm(&state.grass, p / 5.0, 4, 2.0, 0.7);
-
-                        if density > 0.55 {
-                            if density > 0.7
-                                && chunk.block_state(offset_x, y + 1, offset_z).is_air()
-                            {
-                                let upper =
-                                    BlockState::TALL_GRASS.set(PropName::Half, PropValue::Upper);
-                                let lower =
-                                    BlockState::TALL_GRASS.set(PropName::Half, PropValue::Lower);
-
-                                chunk.set_block_state(offset_x, y + 1, offset_z, upper);
-                                chunk.set_block_state(offset_x, y, offset_z, lower);
-                            } else {
-                                chunk.set_block_state(offset_x, y, offset_z, BlockState::GRASS);
-                            }
-                        }
-                    }
+                    chunk.set_block_state(offset_x, offset_y as u32, offset_z, block);
                 }
             }
         }
 
         let _ = state.sender.try_send((pos, chunk));
     }
-}
-
-fn has_terrain_at(state: &ChunkWorkerState, p: DVec3) -> bool {
-    let hilly = lerp(0.1, 1.0, noise01(&state.hilly, p / 400.0)).powi(2);
-
-    let lower = 15.0 + 100.0 * hilly;
-    let upper = lower + 100.0 * hilly;
-
-    if p.y <= lower {
-        return true;
-    } else if p.y >= upper {
-        return false;
-    }
-
-    let density = 1.0 - lerpstep(lower, upper, p.y);
-
-    let n = fbm(&state.density, p / 100.0, 4, 2.0, 0.5);
-
-    n < density
-}
-
-fn lerp(a: f64, b: f64, t: f64) -> f64 {
-    a * (1.0 - t) + b * t
-}
-
-fn lerpstep(edge0: f64, edge1: f64, x: f64) -> f64 {
-    if x <= edge0 {
-        0.0
-    } else if x >= edge1 {
-        1.0
-    } else {
-        (x - edge0) / (edge1 - edge0)
-    }
-}
-
-fn fbm(noise: &SuperSimplex, p: DVec3, octaves: u32, lacunarity: f64, persistence: f64) -> f64 {
-    let mut freq = 1.0;
-    let mut amp = 1.0;
-    let mut amp_sum = 0.0;
-    let mut sum = 0.0;
-
-    for _ in 0..octaves {
-        let n = noise01(noise, p * freq);
-        sum += n * amp;
-        amp_sum += amp;
-
-        freq *= lacunarity;
-        amp *= persistence;
-    }
-
-    // Scale the output to [0, 1]
-    sum / amp_sum
-}
-
-fn noise01(noise: &SuperSimplex, p: DVec3) -> f64 {
-    (noise.get(p.to_array()) + 1.0) / 2.0
 }
