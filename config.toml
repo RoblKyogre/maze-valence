@@ -1,0 +1,13 @@
+[server]
+bind_address = "127.0.0.1:25565"
+max_players = 20
+connection_mode = "offline"
+velocity_secret = "CHANGE_ME"
+
+[generator]
+layer_map = [
+    { mat = "minecraft:stone", y = 0 },
+    { mat = "minecraft:stone", y = 4 },
+]
+wall_thickness = 1
+wall_material = "minecraft:stone"

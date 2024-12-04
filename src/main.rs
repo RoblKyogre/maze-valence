@@ -2,7 +2,6 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::env;
 use std::sync::Arc;
 use std::thread;
 //use std::time::SystemTime;
@@ -13,6 +12,10 @@ use valence::prelude::*;
 use valence::spawn::IsFlat;
 use valence::CompressionThreshold;
 use valence::ServerSettings;
+
+mod config;
+
+use crate::config::read_config;
 
 const SPAWN_POS: DVec3 = DVec3::new(0.0, 200.0, 0.0);
 const HEIGHT: u32 = 384;
@@ -36,11 +39,12 @@ struct GameState {
 type Priority = u64;
 
 pub fn main() {
-    let velocity_secret = env::var("VELOCITY_SECRET").unwrap_or("CHANGE_ME".to_string());
+    // TODO: arg to specify config file?
+    let config = read_config("config.toml").unwrap();
     App::new()
         .insert_resource(NetworkSettings {
             connection_mode: ConnectionMode::Velocity {
-                secret: Arc::from(velocity_secret),
+                secret: Arc::from(config.server.velocity_secret),
             },
             ..Default::default()
         })
@@ -230,8 +234,8 @@ fn chunk_worker(state: Arc<ChunkWorkerState>) {
 
                 // Fill in the terrain column.
                 for offset_y in (0..chunk.height() as i32).rev() {
-                    // TODO: Chunk logic
                     let y = offset_y - 64;
+                    // TODO: Chunk logic
                     const FLOOR_HEIGHT: i32 = 64;
 
                     let block = if y > FLOOR_HEIGHT {
