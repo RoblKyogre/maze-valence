@@ -17,7 +17,6 @@ mod config;
 
 use crate::config::read_config;
 
-const SPAWN_POS: DVec3 = DVec3::new(0.0, 200.0, 0.0);
 const HEIGHT: u32 = 384;
 
 struct ChunkWorkerState {
@@ -40,12 +39,27 @@ type Priority = u64;
 
 pub fn main() {
     // TODO: arg to specify config file?
-    let config = read_config("config.toml").unwrap();
+    let config: config::Config = read_config("config.toml").unwrap();
+    let connection_mode: ConnectionMode = match config.server.connection_mode.as_str() {
+        "velocity" => ConnectionMode::Velocity {
+            secret: Arc::from(config.server.velocity_secret.clone()),
+        },
+        "bungeecord" => ConnectionMode::BungeeCord,
+        "online" => ConnectionMode::Online {
+            prevent_proxy_connections: config.server.online_prevent_proxy_connections,
+        },
+        "offline" => ConnectionMode::Offline,
+        _ => {
+            eprintln!("Invalid connection mode: {}", config.server.connection_mode);
+            eprintln!("Defaulting to Offline mode");
+            ConnectionMode::Offline
+        }
+    };
     App::new()
         .insert_resource(NetworkSettings {
-            connection_mode: ConnectionMode::Velocity {
-                secret: Arc::from(config.server.velocity_secret),
-            },
+            connection_mode: connection_mode,
+            max_players: config.server.max_players,
+            address: config.server.bind_address.parse().unwrap(),
             ..Default::default()
         })
         .insert_resource(ServerSettings {
@@ -53,6 +67,7 @@ pub fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
+        .insert_resource(config)
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -75,6 +90,7 @@ fn setup(
     server: Res<Server>,
     dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
+    config: Res<config::Config>,
 ) {
     // TODO: put this in player connection?
     /*let seconds_per_day = 86_400;
@@ -103,7 +119,8 @@ fn setup(
     // this.
     for _ in 0..thread::available_parallelism().unwrap().get() {
         let state = state.clone();
-        thread::spawn(move || chunk_worker(state));
+        let config = config.clone();
+        thread::spawn(move || chunk_worker(state, config));
     }
 
     commands.insert_resource(GameState {
@@ -130,6 +147,7 @@ fn init_clients(
         Added<Client>,
     >,
     layers: Query<Entity, (With<ChunkLayer>, With<EntityLayer>)>,
+    config: Res<config::Config>,
 ) {
     for (
         mut layer_id,
@@ -145,7 +163,12 @@ fn init_clients(
         layer_id.0 = layer;
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
-        pos.set(SPAWN_POS);
+        let spawn_pos = DVec3::new(
+            config.generator.spawn_pos[0],
+            config.generator.spawn_pos[1],
+            config.generator.spawn_pos[2],
+        );
+        pos.set(spawn_pos);
         *game_mode = GameMode::Creative;
         is_flat.0 = true;
     }
@@ -223,32 +246,55 @@ fn send_recv_chunks(mut layers: Query<&mut ChunkLayer>, state: ResMut<GameState>
     }
 }
 
-fn chunk_worker(state: Arc<ChunkWorkerState>) {
+fn chunk_worker(state: Arc<ChunkWorkerState>, config: config::Config) {
     while let Ok(pos) = state.receiver.recv() {
         let mut chunk = UnloadedChunk::with_height(HEIGHT);
 
         for offset_z in 0..16 {
             for offset_x in 0..16 {
-                //let x = offset_x as i32 + pos.x * 16;
-                //let z = offset_z as i32 + pos.z * 16;
+                let x = offset_x as i32 + pos.x * 16;
+                let z = offset_z as i32 + pos.z * 16;
 
                 // Fill in the terrain column.
                 for offset_y in (0..chunk.height() as i32).rev() {
                     let y = offset_y - 64;
                     // TODO: Chunk logic
                     const FLOOR_HEIGHT: i32 = 64;
+                    let is_wall: bool = determine_wall(
+                        pos,
+                        vec![offset_x, y, offset_z],
+                        config.generator.wall.thick,
+                        config.generator.wall.max_y,
+                    );
 
-                    let block = if y > FLOOR_HEIGHT {
-                        BlockState::AIR
+                    let block = if is_wall {
+                        BlockState::from_raw(config.generator.wall.mat)
                     } else {
-                        BlockState::STONE
+                        let mut state = BlockState::from_raw(0);
+                        for layer in &config.generator.layer_map {
+                            if layer.y == y {
+                                state = BlockState::from_raw(layer.mat);
+                                break;
+                            }
+                        }
+                        state
                     };
 
-                    chunk.set_block_state(offset_x, offset_y as u32, offset_z, block);
+                    chunk.set_block_state(
+                        offset_x as u32,
+                        offset_y as u32,
+                        offset_z as u32,
+                        block.unwrap(),
+                    );
                 }
             }
         }
 
         let _ = state.sender.try_send((pos, chunk));
     }
+}
+
+fn determine_wall(chunk_pos: ChunkPos, local_pos: Vec<i32>, thickness: u32, max_y: i32) -> bool {
+    // TODO: RNG
+    false
 }
