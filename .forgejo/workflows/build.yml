@@ -1,4 +1,4 @@
-name: Rust
+name: Build
 
 on:
   push:
@@ -20,9 +20,11 @@ jobs:
     steps:
     - name: Checkout Repo
       uses: actions/checkout@v4
+    - name: Install Dependencies
+      run: apt-get install -y rust
     - name: Get Architecture
       run: echo "ARCH=$(uname -m) >> $GITHUB_ENV"
-    - name: Build 
+    - name: Build
       run: |
         RELEASE_FLAG=""
         if [[ ${{ matrix.build }} == "release" ]]; then
