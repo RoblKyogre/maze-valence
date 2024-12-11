@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::error::Error;
 use std::fs;
+use std::path::PathBuf;
 use valence::prelude::*;
 
 #[derive(Deserialize, Clone)]
@@ -51,7 +52,7 @@ pub struct Center {
     pub radius: u32,
 }
 
-pub fn read_config(file_path: &str) -> Result<Config, Box<dyn Error>> {
+pub fn read_config(file_path: PathBuf) -> Result<Config, Box<dyn Error>> {
     let toml_content = fs::read_to_string(file_path)?;
     let config: Config = toml::from_str(&toml_content)?;
 

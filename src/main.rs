@@ -1,8 +1,11 @@
 #![allow(clippy::type_complexity)]
 
+use clap::Parser;
 use rand::Rng;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::process;
 use std::sync::Arc;
 use std::thread;
 
@@ -39,9 +42,33 @@ struct GameState {
 /// values are sent first.
 type Priority = u64;
 
+#[derive(Parser, Resource)]
+#[clap(author, version, about)]
+struct Cli {
+    /// The path to a toml file containing the server configuration.
+    config: Option<PathBuf>,
+}
+
 pub fn main() {
-    // TODO: arg to specify config file?
-    let config: config::Config = read_config("config.toml").unwrap();
+    let cli = Cli::parse();
+
+    let config_path = cli.config.unwrap_or_else(|| PathBuf::from("maze.toml"));
+
+    if !config_path.exists() {
+        eprintln!("`{}` does not exist. Exiting.", config_path.display());
+        process::exit(2);
+    }
+
+    let config: config::Config;
+
+    match read_config(config_path) {
+        Ok(c) => config = c,
+        Err(e) => {
+            eprintln!("Error reading config: {}", e);
+            process::exit(1);
+        }
+    }
+
     let connection_mode: ConnectionMode = match config.server.connection_mode.as_str() {
         "velocity" => ConnectionMode::Velocity {
             secret: Arc::from(config.server.velocity_secret.clone()),
