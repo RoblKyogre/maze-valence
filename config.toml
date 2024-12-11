@@ -4,7 +4,6 @@ max_players = 20
 connection_mode = "offline"
 online_prevent_proxy_connections = false
 velocity_secret = "CHANGE_ME"
-login_message = "Welcome to the server!"
 
 [world]
 center_map = [{ mat = "ochre_froglight", min_y = 66, max_y = 67, radius = 1 }]
@@ -17,3 +16,5 @@ layer_map = [
 ]
 spawn_pos = [7.5, 61, 7.5]
 wall_chance = 0.25
+login_message = "Welcome to the backrooms."
+biome = "the_void"

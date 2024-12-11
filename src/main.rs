@@ -5,7 +5,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
-//use std::time::SystemTime;
 
 use flume::{Receiver, Sender};
 //use tracing::info;
@@ -95,16 +94,6 @@ fn setup(
     biomes: Res<BiomeRegistry>,
     world_config: Res<config::World>,
 ) {
-    // TODO: put this in player connection?
-    /*let seconds_per_day = 86_400;
-    let seed = (SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        / seconds_per_day) as u32;
-
-    info!("current seed: {seed}");*/
-
     let (finished_sender, finished_receiver) = flume::unbounded();
     let (pending_sender, pending_receiver) = flume::unbounded();
 
@@ -123,7 +112,11 @@ fn setup(
     for _ in 0..thread::available_parallelism().unwrap().get() {
         let state = state.clone();
         let world_config = world_config.clone();
-        thread::spawn(move || chunk_worker(state, world_config));
+        let parsed_biome_id: BiomeId = match Ident::new(world_config.biome.clone()) {
+            Ok(ident) => biomes.index_of(ident.as_str_ident()).unwrap_or_default(),
+            Err(_) => BiomeId::DEFAULT, // Or any other default value
+        };
+        thread::spawn(move || chunk_worker(state, world_config, parsed_biome_id));
     }
 
     commands.insert_resource(GameState {
@@ -146,6 +139,7 @@ fn init_clients(
             &mut Position,
             &mut GameMode,
             &mut IsFlat,
+            &mut Client,
         ),
         Added<Client>,
     >,
@@ -159,6 +153,7 @@ fn init_clients(
         mut pos,
         mut game_mode,
         mut is_flat,
+        mut client,
     ) in &mut clients
     {
         let layer = layers.single();
@@ -174,6 +169,7 @@ fn init_clients(
         pos.set(spawn_pos);
         *game_mode = GameMode::Creative;
         is_flat.0 = true;
+        client.send_chat_message(world_config.login_message.clone());
     }
 }
 
@@ -249,9 +245,14 @@ fn send_recv_chunks(mut layers: Query<&mut ChunkLayer>, state: ResMut<GameState>
     }
 }
 
-fn chunk_worker(state: Arc<ChunkWorkerState>, world_config: config::World) {
+fn chunk_worker(
+    state: Arc<ChunkWorkerState>,
+    world_config: config::World,
+    parsed_biome_id: BiomeId,
+) {
     while let Ok(pos) = state.receiver.recv() {
         let mut chunk = UnloadedChunk::with_height(HEIGHT);
+        chunk.fill_biomes(parsed_biome_id);
         let can_be_wall: [[bool; 2]; 2] = [
             [
                 random_bool(world_config.wall_chance),
@@ -263,10 +264,10 @@ fn chunk_worker(state: Arc<ChunkWorkerState>, world_config: config::World) {
             ],
         ];
 
-        for offset_z in 0..16 {
-            for offset_x in 0..16 {
-                let x = offset_x as i32 + pos.x * 16;
-                let z = offset_z as i32 + pos.z * 16;
+        for offset_z in 0..CHUNK_SIZE {
+            for offset_x in 0..CHUNK_SIZE {
+                //let x = offset_x as i32 + pos.x * CHUNK_SIZE;
+                //let z = offset_z as i32 + pos.z * CHUNK_SIZE;
 
                 // Fill in the terrain column.
                 for offset_y in (0..chunk.height() as i32).rev() {

@@ -25,6 +25,8 @@ pub struct World {
     pub layer_map: Vec<Layer>,
     pub spawn_pos: Vec<f64>,
     pub wall_chance: f64,
+    pub login_message: String,
+    pub biome: String,
 }
 
 #[derive(Deserialize, Clone)]
