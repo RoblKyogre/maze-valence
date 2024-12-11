@@ -13,7 +13,7 @@ jobs:
   build:
     strategy:
       matrix:
-        runner: ['ubuntu-latest', 'ubuntu-latest-arm64']
+        runner: ['ubuntu-latest']
         build: ['debug', 'release']
     runs-on: '${{ matrix.runner }}'
     container:
