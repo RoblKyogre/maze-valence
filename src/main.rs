@@ -1,5 +1,6 @@
 #![allow(clippy::type_complexity)]
 
+use rand::Rng;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,6 +19,8 @@ mod config;
 use crate::config::read_config;
 
 const HEIGHT: u32 = 384;
+const CHUNK_SIZE: i32 = 16;
+const CHUNK_CENTER: f64 = (CHUNK_SIZE as f64 - 1.0) / 2.0;
 
 struct ChunkWorkerState {
     sender: Sender<(ChunkPos, UnloadedChunk)>,
@@ -67,7 +70,7 @@ pub fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
-        .insert_resource(config)
+        .insert_resource(config.world)
         .add_systems(Startup, setup)
         .add_systems(
             Update,
@@ -90,7 +93,7 @@ fn setup(
     server: Res<Server>,
     dimensions: Res<DimensionTypeRegistry>,
     biomes: Res<BiomeRegistry>,
-    config: Res<config::Config>,
+    world_config: Res<config::World>,
 ) {
     // TODO: put this in player connection?
     /*let seconds_per_day = 86_400;
@@ -119,8 +122,8 @@ fn setup(
     // this.
     for _ in 0..thread::available_parallelism().unwrap().get() {
         let state = state.clone();
-        let config = config.clone();
-        thread::spawn(move || chunk_worker(state, config));
+        let world_config = world_config.clone();
+        thread::spawn(move || chunk_worker(state, world_config));
     }
 
     commands.insert_resource(GameState {
@@ -147,7 +150,7 @@ fn init_clients(
         Added<Client>,
     >,
     layers: Query<Entity, (With<ChunkLayer>, With<EntityLayer>)>,
-    config: Res<config::Config>,
+    world_config: Res<config::World>,
 ) {
     for (
         mut layer_id,
@@ -164,9 +167,9 @@ fn init_clients(
         visible_chunk_layer.0 = layer;
         visible_entity_layers.0.insert(layer);
         let spawn_pos = DVec3::new(
-            config.generator.spawn_pos[0],
-            config.generator.spawn_pos[1],
-            config.generator.spawn_pos[2],
+            world_config.spawn_pos[0],
+            world_config.spawn_pos[1],
+            world_config.spawn_pos[2],
         );
         pos.set(spawn_pos);
         *game_mode = GameMode::Creative;
@@ -246,9 +249,19 @@ fn send_recv_chunks(mut layers: Query<&mut ChunkLayer>, state: ResMut<GameState>
     }
 }
 
-fn chunk_worker(state: Arc<ChunkWorkerState>, config: config::Config) {
+fn chunk_worker(state: Arc<ChunkWorkerState>, world_config: config::World) {
     while let Ok(pos) = state.receiver.recv() {
         let mut chunk = UnloadedChunk::with_height(HEIGHT);
+        let can_be_wall: [[bool; 2]; 2] = [
+            [
+                random_bool(world_config.wall_chance),
+                random_bool(world_config.wall_chance),
+            ],
+            [
+                random_bool(world_config.wall_chance),
+                random_bool(world_config.wall_chance),
+            ],
+        ];
 
         for offset_z in 0..16 {
             for offset_x in 0..16 {
@@ -259,33 +272,52 @@ fn chunk_worker(state: Arc<ChunkWorkerState>, config: config::Config) {
                 for offset_y in (0..chunk.height() as i32).rev() {
                     let y = offset_y - 64;
                     // TODO: Chunk logic
-                    const FLOOR_HEIGHT: i32 = 64;
-                    let is_wall: bool = determine_wall(
-                        pos,
-                        vec![offset_x, y, offset_z],
-                        config.generator.wall.thick,
-                        config.generator.wall.max_y,
-                    );
+                    let mut block: BlockState = BlockState::AIR;
 
-                    let block = if is_wall {
-                        BlockState::from_raw(config.generator.wall.mat)
-                    } else {
-                        let mut state = BlockState::from_raw(0);
-                        for layer in &config.generator.layer_map {
-                            if layer.y == y {
-                                state = BlockState::from_raw(layer.mat);
+                    for center in &world_config.center_map {
+                        if y >= center.min_y
+                            && y < center.max_y
+                            && ((offset_x as f64 - CHUNK_CENTER).abs() <= center.radius as f64)
+                            && ((offset_z as f64 - CHUNK_CENTER).abs() <= center.radius as f64)
+                        {
+                            block = BlockState::from_kind(
+                                BlockKind::from_str(center.mat.as_str()).unwrap_or_default(),
+                            );
+                            break;
+                        }
+                    }
+
+                    if block == (BlockState::AIR) {
+                        for wall in &world_config.wall_map {
+                            if y >= wall.min_y
+                                && y < wall.max_y
+                                && determine_wall(
+                                    offset_x,
+                                    offset_z,
+                                    can_be_wall,
+                                    wall.thick as i32,
+                                )
+                            {
+                                block = BlockState::from_kind(
+                                    BlockKind::from_str(wall.mat.as_str()).unwrap_or_default(),
+                                );
                                 break;
                             }
                         }
-                        state
+                    }
+
+                    if block == (BlockState::AIR) {
+                        for layer in &world_config.layer_map {
+                            if y == layer.y {
+                                block = BlockState::from_kind(
+                                    BlockKind::from_str(layer.mat.as_str()).unwrap_or_default(),
+                                );
+                                break;
+                            }
+                        }
                     };
 
-                    chunk.set_block_state(
-                        offset_x as u32,
-                        offset_y as u32,
-                        offset_z as u32,
-                        block.unwrap(),
-                    );
+                    chunk.set_block_state(offset_x as u32, offset_y as u32, offset_z as u32, block);
                 }
             }
         }
@@ -294,7 +326,21 @@ fn chunk_worker(state: Arc<ChunkWorkerState>, config: config::Config) {
     }
 }
 
-fn determine_wall(chunk_pos: ChunkPos, local_pos: Vec<i32>, thickness: u32, max_y: i32) -> bool {
-    // TODO: RNG
-    false
+fn random_bool(chance: f64) -> bool {
+    let mut rng = rand::thread_rng();
+    rng.gen::<f64>() <= chance
+}
+
+fn determine_wall(
+    offset_x: i32,
+    offset_z: i32,
+    can_be_wall: [[bool; 2]; 2],
+    thickness: i32,
+) -> bool {
+    let mut is_wall: bool = false;
+    is_wall = is_wall || ((offset_x < thickness) && can_be_wall[0][0]);
+    is_wall = is_wall || ((offset_x >= CHUNK_SIZE - thickness) && can_be_wall[0][1]);
+    is_wall = is_wall || ((offset_z < thickness) && can_be_wall[1][0]);
+    is_wall = is_wall || ((offset_z >= CHUNK_SIZE - thickness) && can_be_wall[1][1]);
+    is_wall
 }

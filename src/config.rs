@@ -3,10 +3,10 @@ use std::error::Error;
 use std::fs;
 use valence::prelude::*;
 
-#[derive(Deserialize, Clone, valence::prelude::Resource)]
+#[derive(Deserialize, Clone)]
 pub struct Config {
     pub server: Server,
-    pub generator: Generator,
+    pub world: World,
 }
 
 #[derive(Deserialize, Clone)]
@@ -18,24 +18,35 @@ pub struct Server {
     pub velocity_secret: String,
 }
 
-#[derive(Deserialize, Clone)]
-pub struct Generator {
+#[derive(Deserialize, Clone, valence::prelude::Resource)]
+pub struct World {
+    pub center_map: Vec<Center>,
+    pub wall_map: Vec<Wall>,
     pub layer_map: Vec<Layer>,
-    pub wall: Wall,
     pub spawn_pos: Vec<f64>,
+    pub wall_chance: f64,
 }
 
 #[derive(Deserialize, Clone)]
 pub struct Layer {
-    pub mat: u16,
+    pub mat: String,
     pub y: i32,
 }
 
 #[derive(Deserialize, Clone)]
 pub struct Wall {
-    pub mat: u16,
+    pub mat: String,
+    pub min_y: i32,
     pub max_y: i32,
     pub thick: u32,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Center {
+    pub mat: String,
+    pub min_y: i32,
+    pub max_y: i32,
+    pub radius: u32,
 }
 
 pub fn read_config(file_path: &str) -> Result<Config, Box<dyn Error>> {

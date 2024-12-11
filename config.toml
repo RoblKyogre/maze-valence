@@ -6,7 +6,14 @@ online_prevent_proxy_connections = false
 velocity_secret = "CHANGE_ME"
 login_message = "Welcome to the server!"
 
-[generator]
-wall = { mat = 16, max_y = 64, thick = 1 }
-layer_map = [{ mat = 1, y = 60 }, { mat = 1, y = 68 }]
-spawn_pos = [0, 64, 0]
+[world]
+center_map = [{ mat = "ochre_froglight", min_y = 66, max_y = 67, radius = 1 }]
+wall_map = [
+    { mat = "stripped_bamboo_block", min_y = 61, max_y = 66, thick = 1 },
+]
+layer_map = [
+    { mat = "dirt_path", y = 60 },
+    { mat = "stripped_birch_wood", y = 66 },
+]
+spawn_pos = [7.5, 61, 7.5]
+wall_chance = 0.25
