@@ -26,10 +26,8 @@ jobs:
       run: echo "ARCH=$(uname -m) >> $GITHUB_ENV"
     - name: Build
       run: |
-        set -xeu
-        BUILD="${{ matrix.build }}"
         RELEASE_FLAG=""
-        if [ "${BUILD}" == "release" ]; then
+        if [ "${{ matrix.build }}" = "release" ]; then
           RELEASE_FLAG="--release"
         fi
         cargo build ${RELEASE_FLAG} --verbose
