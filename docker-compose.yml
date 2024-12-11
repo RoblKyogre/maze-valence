@@ -3,8 +3,8 @@ services:
     build: .
     #image: maze-valence:latest
     container_name: maze-valence
-    environment:
-      VELOCITY_SECRET: CHANGE_ME
+    volumes:
+      - ./maze.toml:/data/maze.toml:ro
     ports:
       - 25565:25565
     restart: unless-stopped
