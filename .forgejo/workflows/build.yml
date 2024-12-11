@@ -1,0 +1,36 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        runner: ['ubuntu-latest', 'ubuntu-latest-arm64']
+        build: ['debug', 'release']
+    runs-on: '${{ matrix.runner }}'
+
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@v4
+    - name: Get Architecture
+      run: echo "ARCH=$(uname -m) >> $GITHUB_ENV"
+    - name: Build 
+      run: |
+        RELEASE_FLAG=""
+        if [[ ${{ matrix.build }} == "release" ]]; then
+	      RELEASE_FLAG="--release"
+        fi
+        cargo build ${RELEASE_FLAG} --verbose
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: maze-valence-${{ env.ARCH }}-${{ matrix.build }}
+        path: target/${{ matrix.build }}/maze-valence
