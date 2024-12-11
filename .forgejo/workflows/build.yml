@@ -26,7 +26,7 @@ jobs:
       run: |
         RELEASE_FLAG=""
         if [[ ${{ matrix.build }} == "release" ]]; then
-	      RELEASE_FLAG="--release"
+          RELEASE_FLAG="--release"
         fi
         cargo build ${RELEASE_FLAG} --verbose
     - name: Upload Artifact
