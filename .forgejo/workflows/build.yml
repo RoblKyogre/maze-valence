@@ -28,7 +28,7 @@ jobs:
       run: |
         set -xeu
         RELEASE_FLAG=""
-        if [ "${{ matrix.build }}" == "release" ]; then
+        if [ \"${{ matrix.build }}\" == \"release\" ]; then
           RELEASE_FLAG="--release"
         fi
         cargo build ${RELEASE_FLAG} --verbose
