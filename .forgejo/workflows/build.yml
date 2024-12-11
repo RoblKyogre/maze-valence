@@ -30,7 +30,7 @@ jobs:
         if [ "${{ matrix.build }}" = "release" ]; then
           RELEASE_FLAG="--release"
         fi
-        cargo build ${RELEASE_FLAG} --verbose
+        cargo build ${RELEASE_FLAG}
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
