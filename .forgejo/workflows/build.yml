@@ -23,7 +23,7 @@ jobs:
     - name: Checkout Repo
       uses: actions/checkout@v4
     - name: Get Architecture
-      run: echo "ARCH=$(uname -m) >> $GITHUB_ENV"
+      run: echo "ARCH=$(uname -m)" >> $GITHUB_ENV
     - name: Build
       run: |
         RELEASE_FLAG=""
