@@ -51,6 +51,8 @@ jobs:
         path: artifacts
         pattern: maze-valence-*-release
         merge-multiple: true
+    - name: List Artifacts
+      run: ls -lAR artifacts
     - name: Upload Release
       uses: actions/forgejo-release@v2
       with:
