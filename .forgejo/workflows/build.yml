@@ -51,7 +51,7 @@ jobs:
       with:
         path: artifacts
         pattern: maze-valence-*
-        merge-multiple: false
+        merge-multiple: true
     - name: List Artifacts
       run: ls -lAR artifacts
     - name: Upload Release
