@@ -1,4 +1,4 @@
-name: Build
+name: Build & Push
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
       uses: actions/checkout@v4
     - name: Get Architecture
       run: echo "ARCH=$(uname -m)" >> $GITHUB_ENV
-    - name: Build
+    - name: Build Binary
       run: |
         RELEASE_FLAG=""
         if [ "${{ matrix.build }}" = "release" ]; then
@@ -36,3 +36,26 @@ jobs:
       with:
         name: maze-valence-${{ env.ARCH }}-${{ matrix.build }}
         path: target/${{ matrix.build }}/maze-valence
+  push:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'push' }}
+
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@v4
+    - name: Download Artifacts
+      uses: forgejo/download-artifact@v4
+      with:
+        path: artifacts
+        pattern: maze-valence-*-release
+        merge-multiple: true
+    - name: Upload Release
+      uses: actions/forgejo-release@v2
+      with:
+        direction: upload
+        url: https://git.craftingcomrades.net
+        release-dir: artifacts
+        token: ${{ github.token }}
+        tag: "nightly"
+        override: true
+        prerelease: true
