@@ -62,5 +62,6 @@ jobs:
         release-dir: artifacts
         token: ${{ github.token }}
         tag: "nightly"
+        title: "Nightly Release"
         override: true
         prerelease: true
