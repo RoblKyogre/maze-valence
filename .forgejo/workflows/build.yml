@@ -73,7 +73,7 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
       with:
-        endpoint: docker-dind
+        endpoint: docker-in-docker
         driver-opts: network=host
 
     - name: Log into Forgejo Registry
