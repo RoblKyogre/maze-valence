@@ -1,0 +1,16 @@
+# So for some stupid reason, build args don't work for COPY or ADD
+# Therefore, this builder stage is necessary...
+ARG BASE_IMAGE=debian:stable-slim
+FROM ${BASE_IMAGE} as builder
+COPY artifacts/* .
+RUN mv maze-valence-$(uname -m)-release /maze-valence
+
+FROM ${BASE_IMAGE} as final
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+COPY --from=builder /maze-valence /maze-valence
+COPY maze.toml /data/maze.toml
+CMD /maze-valence /data/maze.toml
