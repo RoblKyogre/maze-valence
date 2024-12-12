@@ -14,7 +14,7 @@ layer_map = [
     { mat = "dirt_path", y = 60 },
     { mat = "stripped_birch_wood", y = 66 },
 ]
-spawn_pos = [7.5, 61.25, 7.5]
+spawn_pos = [7.5, 64, 7.5]
 wall_chance = 0.25
 login_message = "Welcome to the backrooms."
 biome = "the_void"
