@@ -31,11 +31,12 @@ jobs:
           RELEASE_FLAG="--release"
         fi
         cargo build ${RELEASE_FLAG}
+        mv target/${{ matrix.build }}/maze-valence maze-valence-${{ env.ARCH }}-${{ matrix.build }}
     - name: Upload Artifact
       uses: forgejo/upload-artifact@v4
       with:
         name: maze-valence-${{ env.ARCH }}-${{ matrix.build }}
-        path: target/${{ matrix.build }}/maze-valence
+        path: maze-valence-${{ env.ARCH }}-${{ matrix.build }}
   push:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'push' }}
@@ -50,7 +51,7 @@ jobs:
       with:
         path: artifacts
         pattern: maze-valence-*
-        merge-multiple: true
+        merge-multiple: false
     - name: List Artifacts
       run: ls -lAR artifacts
     - name: Upload Release
