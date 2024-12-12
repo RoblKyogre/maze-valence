@@ -84,7 +84,7 @@ jobs:
       with:
         registry: git.craftingcomrades.net
         username: ${{ github.actor }}
-        password: ${{ github.token }}
+        password: ${{ secrets.FORGEJO_REGISTRY_TOKEN }}
 
     - name: Get Metadata
       id: meta
