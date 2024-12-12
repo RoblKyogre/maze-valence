@@ -49,7 +49,7 @@ jobs:
       uses: forgejo/download-artifact@v4
       with:
         path: artifacts
-        pattern: maze-valence-*-release
+        pattern: maze-valence-*
         merge-multiple: true
     - name: List Artifacts
       run: ls -lAR artifacts
