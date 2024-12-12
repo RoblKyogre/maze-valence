@@ -53,8 +53,10 @@ jobs:
         pattern: maze-valence-*-release
         merge-multiple: true
         
-    - name: List Artifacts
-      run: ls -lAR artifacts
+    - name: List And Fix Artifacts
+      run: |
+        ls -lAR artifacts
+        chmod +x artifacts/*
       
     - name: Upload Release
       uses: actions/forgejo-release@v2
