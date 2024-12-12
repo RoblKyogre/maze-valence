@@ -68,12 +68,15 @@ jobs:
         override: true
         prerelease: true
 
+
+    - name: Create Docker Context
+      run: docker context create docker-dind --docker "host=tcp://docker-in-docker:2375"
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
       with:
-        endpoint: docker-in-docker
+        endpoint: docker-dind
         driver-opts: network=host
 
     - name: Log into Forgejo Registry
